@@ -41,6 +41,7 @@ def read_rules(chart_dir: Path) -> list[dict]:
             raise ValueError(f"Duplicate rule id: {rule_id}")
         if rule.get("source") != "official":
             raise ValueError(f"External rule must use official source: {rule_id}")
+        validate_calculation(rule, rule_id)
         icon_path = validate_relative_icon_path(rule, rule_id)
         validate_svg(chart_dir / icon_path)
         ids.add(rule_id)
@@ -50,6 +51,31 @@ def read_rules(chart_dir: Path) -> list[dict]:
     if len(rules) > MAX_RULES:
         raise ValueError(f"Chart bundle exceeds {MAX_RULES} rules")
     return sorted(rules, key=lambda item: item["id"])
+
+
+def validate_calculation(rule: dict, rule_id: str) -> None:
+    calculation = rule.get("calculation", {})
+    predicate = calculation.get("predicate", {})
+    if calculation.get("kind") != "predicate":
+        raise ValueError(f"External rule must use a predicate calculation: {rule_id}")
+    evidence = predicate.get("evidence")
+    operator = predicate.get("operator")
+    value = predicate.get("value", {})
+    if evidence == "target_sdk":
+        if operator not in {"equal", "greater_than_or_equal", "less_than_or_equal"}:
+            raise ValueError(f"Target SDK rule has an invalid operator: {rule_id}")
+        if set(value) != {"integer"} or not isinstance(value["integer"], int):
+            raise ValueError(f"Target SDK rule requires one integer value: {rule_id}")
+    elif evidence == "native_library":
+        library_name = value.get("string")
+        if operator != "contains":
+            raise ValueError(f"Native library rule must use contains: {rule_id}")
+        if set(value) != {"string"} or not isinstance(library_name, str) or not re.fullmatch(
+            r"[A-Za-z0-9._+-]{1,160}", library_name
+        ):
+            raise ValueError(f"Native library rule requires one safe library name: {rule_id}")
+    else:
+        raise ValueError(f"Unsupported rule evidence: {rule_id}: {evidence}")
 
 
 def validate_relative_icon_path(rule: dict, rule_id: str) -> PurePosixPath:

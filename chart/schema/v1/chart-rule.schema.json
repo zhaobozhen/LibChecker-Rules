@@ -85,7 +85,8 @@
         "fingerprint": {
             "enum": [
                 "standard",
-                "features"
+                "features",
+                "artifact"
             ],
             "default": "standard"
         }
@@ -116,14 +117,28 @@
         "value": {
             "type": "object",
             "additionalProperties": false,
-            "required": [
-                "integer"
-            ],
             "properties": {
                 "integer": {
                     "type": "integer"
+                },
+                "string": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160
                 }
-            }
+            },
+            "oneOf": [
+                {
+                    "required": [
+                        "integer"
+                    ]
+                },
+                {
+                    "required": [
+                        "string"
+                    ]
+                }
+            ]
         },
         "predicateCalculation": {
             "type": "object",
@@ -149,14 +164,16 @@
                     "properties": {
                         "evidence": {
                             "enum": [
-                                "target_sdk"
+                                "target_sdk",
+                                "native_library"
                             ]
                         },
                         "operator": {
                             "enum": [
                                 "equal",
                                 "greater_than_or_equal",
-                                "less_than_or_equal"
+                                "less_than_or_equal",
+                                "contains"
                             ]
                         },
                         "value": {
@@ -168,7 +185,60 @@
                         "unmatchedTitle": {
                             "$ref": "#/$defs/text"
                         }
-                    }
+                    },
+                    "allOf": [
+                        {
+                            "if": {
+                                "properties": {
+                                    "evidence": {
+                                        "const": "target_sdk"
+                                    }
+                                }
+                            },
+                            "then": {
+                                "properties": {
+                                    "operator": {
+                                        "enum": [
+                                            "equal",
+                                            "greater_than_or_equal",
+                                            "less_than_or_equal"
+                                        ]
+                                    },
+                                    "value": {
+                                        "required": [
+                                            "integer"
+                                        ]
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "if": {
+                                "properties": {
+                                    "evidence": {
+                                        "const": "native_library"
+                                    }
+                                }
+                            },
+                            "then": {
+                                "properties": {
+                                    "operator": {
+                                        "const": "contains"
+                                    },
+                                    "value": {
+                                        "required": [
+                                            "string"
+                                        ],
+                                        "properties": {
+                                            "string": {
+                                                "pattern": "^[A-Za-z0-9._+-]{1,160}$"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    ]
                 }
             }
         }
