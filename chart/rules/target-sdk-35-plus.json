@@ -5,8 +5,7 @@
     "title": {
         "translations": {
             "en": "Target SDK 35+",
-            "zh": "Target SDK 35+",
-            "zh-CN": "Target SDK 35+"
+            "zh-Hans": "Target SDK 35+"
         }
     },
     "icon": {
@@ -25,15 +24,13 @@
             "matchedTitle": {
                 "translations": {
                     "en": "Target SDK 35 or newer",
-                    "zh": "Target SDK 35 及以上",
-                    "zh-CN": "Target SDK 35 及以上"
+                    "zh-Hans": "Target SDK 35 及以上"
                 }
             },
             "unmatchedTitle": {
                 "translations": {
                     "en": "Target SDK 34 or older",
-                    "zh": "Target SDK 34 及以下",
-                    "zh-CN": "Target SDK 34 及以下"
+                    "zh-Hans": "Target SDK 34 及以下"
                 }
             }
         }

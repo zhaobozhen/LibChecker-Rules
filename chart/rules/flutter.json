@@ -5,8 +5,7 @@
     "title": {
         "translations": {
             "en": "Flutter",
-            "zh": "Flutter",
-            "zh-CN": "Flutter"
+            "zh-Hans": "Flutter"
         }
     },
     "icon": {
@@ -25,15 +24,13 @@
             "matchedTitle": {
                 "translations": {
                     "en": "Flutter apps",
-                    "zh": "Flutter 应用",
-                    "zh-CN": "Flutter 应用"
+                    "zh-Hans": "Flutter 应用"
                 }
             },
             "unmatchedTitle": {
                 "translations": {
                     "en": "Other apps",
-                    "zh": "其他应用",
-                    "zh-CN": "其他应用"
+                    "zh-Hans": "其他应用"
                 }
             }
         }
