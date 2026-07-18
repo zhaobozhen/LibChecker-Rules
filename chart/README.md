@@ -16,7 +16,7 @@ Run the checks from the repository root:
 
 ```shell
 python3 -m unittest chart.tools.test_build_bundle
-python3 chart/tools/build_bundle.py --bundle-version 6
+python3 chart/tools/build_bundle.py --bundle-version 7
 ```
 
 The APK never executes code from this repository. Rules can only select

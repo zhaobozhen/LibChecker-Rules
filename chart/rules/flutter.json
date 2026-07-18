@@ -5,6 +5,7 @@
     "title": {
         "translations": {
             "en": "Flutter",
+            "zh": "Flutter",
             "zh-CN": "Flutter"
         }
     },
@@ -24,12 +25,14 @@
             "matchedTitle": {
                 "translations": {
                     "en": "Flutter apps",
+                    "zh": "Flutter 应用",
                     "zh-CN": "Flutter 应用"
                 }
             },
             "unmatchedTitle": {
                 "translations": {
                     "en": "Other apps",
+                    "zh": "其他应用",
                     "zh-CN": "其他应用"
                 }
             }
