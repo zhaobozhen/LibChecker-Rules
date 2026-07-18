@@ -51,6 +51,7 @@ class BuildChartBundleTest(unittest.TestCase):
         )
 
         self.assertEqual(4, flutter_rule["icon"]["insetDp"])
+        self.assertEqual("original", flutter_rule["icon"]["renderMode"])
 
 
 if __name__ == "__main__":
