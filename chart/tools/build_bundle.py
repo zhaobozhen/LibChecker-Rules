@@ -92,9 +92,6 @@ def validate_relative_icon_path(rule: dict, rule_id: str) -> PurePosixPath:
         or icon_path.suffix.lower() != ".svg"
     ):
         raise ValueError(f"Unsafe SVG asset path for {rule_id}: {asset}")
-    inset_dp = icon.get("insetDp", 8)
-    if not isinstance(inset_dp, int) or not 0 <= inset_dp <= 12:
-        raise ValueError(f"Invalid SVG icon inset for {rule_id}: {inset_dp}")
     return icon_path
 
 

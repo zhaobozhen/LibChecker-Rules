@@ -10,7 +10,6 @@
     },
     "icon": {
         "asset": "icons/flutter.svg",
-        "insetDp": 8,
         "renderMode": "original",
         "tintRole": "on_surface"
     },
