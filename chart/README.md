@@ -16,11 +16,15 @@ Run the checks from the repository root:
 
 ```shell
 python3 -m unittest chart.tools.test_build_bundle
-python3 chart/tools/build_bundle.py --bundle-version 8
+python3 chart/tools/build_bundle.py --bundle-version 10
 ```
 
-The APK never executes code from this repository. Rules can only select
-evidence and operators implemented by the installed LibChecker version.
+The APK never executes code from this repository. Rules only compose bounded,
+declarative evidence primitives implemented by the installed LibChecker
+version.
 
-Schema v1 currently supports numeric comparisons on `target_sdk` and exact
-library-name membership through `native_library` plus `contains`.
+Schema v1 supports numeric comparisons on `target_sdk`, exact library-name
+membership through `native_library`, recursive `all`/`any`/`not` conditions,
+DEX class queries, and manifest receiver actions. A DEX class query may combine
+a class-name pattern, string constants, and method references; constraints in
+one query must be satisfied by the same class.

@@ -16,7 +16,7 @@ class BuildChartBundleTest(unittest.TestCase):
         rules = read_rules(self.chart_dir)
 
         self.assertEqual(
-            ["official.flutter", "official.target-sdk-35-plus"],
+            ["official.flutter", "official.itgsa", "official.target-sdk-35-plus"],
             [rule["id"] for rule in rules],
         )
 
@@ -28,12 +28,17 @@ class BuildChartBundleTest(unittest.TestCase):
             self.assertEqual(first_manifest, second_manifest)
             with zipfile.ZipFile(Path(first) / "chart.bundle") as archive:
                 self.assertEqual(
-                    ["catalog.json", "icons/android-15.svg", "icons/flutter.svg"],
+                    [
+                        "catalog.json",
+                        "icons/android-15.svg",
+                        "icons/flutter.svg",
+                        "icons/itgsa.svg",
+                    ],
                     archive.namelist(),
                 )
                 catalog = json.loads(archive.read("catalog.json"))
             self.assertEqual(1, catalog["schemaVersion"])
-            self.assertEqual(2, len(catalog["definitions"]))
+            self.assertEqual(3, len(catalog["definitions"]))
 
     def test_native_library_rule_rejects_incompatible_operator(self) -> None:
         flutter_rule = next(
@@ -51,6 +56,45 @@ class BuildChartBundleTest(unittest.TestCase):
         )
 
         self.assertEqual("original", flutter_rule["icon"]["renderMode"])
+
+    def test_itgsa_rule_keeps_all_detection_data_in_the_condition(self) -> None:
+        itgsa_rule = next(
+            rule for rule in read_rules(self.chart_dir) if rule["id"] == "official.itgsa"
+        )
+        conditions = itgsa_rule["calculation"]["predicate"]["condition"]["any"]
+        self.assertEqual(
+            {"dex_class", "manifest_receiver_action"},
+            {condition["evidence"] for condition in conditions},
+        )
+
+        dex_condition = next(
+            condition for condition in conditions if condition["evidence"] == "dex_class"
+        )
+        queries = dex_condition["value"]["dexClasses"]
+        self.assertEqual("Lcom/voip/service/", queries[0]["name"]["value"])
+        self.assertEqual(
+            "Lcom/os/widget/SecurityPasteView;", queries[1]["name"]["value"]
+        )
+        self.assertEqual(
+            {"itgsa.intent.action.TRIM", "itgsa.intent.action.KILL"},
+            set(queries[2]["stringConstants"]),
+        )
+        self.assertEqual(
+            {"<init>", "addAction"},
+            {reference["name"] for reference in queries[2]["methodReferences"]},
+        )
+
+    def test_unknown_evidence_is_rejected(self) -> None:
+        itgsa_rule = next(
+            rule for rule in read_rules(self.chart_dir) if rule["id"] == "official.itgsa"
+        )
+        invalid_rule = deepcopy(itgsa_rule)
+        invalid_rule["calculation"]["predicate"]["condition"]["any"][0][
+            "evidence"
+        ] = "app_capability"
+
+        with self.assertRaisesRegex(ValueError, "Unsupported rule evidence"):
+            validate_calculation(invalid_rule, invalid_rule["id"])
 
 
 if __name__ == "__main__":
