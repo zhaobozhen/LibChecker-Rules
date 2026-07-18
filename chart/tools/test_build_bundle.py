@@ -45,6 +45,13 @@ class BuildChartBundleTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "must use contains"):
             validate_calculation(invalid_rule, invalid_rule["id"])
 
+    def test_flutter_rule_uses_a_larger_icon_presentation(self) -> None:
+        flutter_rule = next(
+            rule for rule in read_rules(self.chart_dir) if rule["id"] == "official.flutter"
+        )
+
+        self.assertEqual(4, flutter_rule["icon"]["insetDp"])
+
 
 if __name__ == "__main__":
     unittest.main()
