@@ -2,6 +2,7 @@
     "id": "official.target-sdk-35-plus",
     "revision": 1,
     "source": "official",
+    "releaseChannel": "preview-only",
     "title": {
         "translations": {
             "en": "Target SDK 35+",

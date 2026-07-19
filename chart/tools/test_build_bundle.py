@@ -39,6 +39,27 @@ class BuildChartBundleTest(unittest.TestCase):
                 catalog = json.loads(archive.read("catalog.json"))
             self.assertEqual(1, catalog["schemaVersion"])
             self.assertEqual(3, len(catalog["definitions"]))
+            self.assertTrue(
+                all("releaseChannel" not in rule for rule in catalog["definitions"])
+            )
+
+    def test_stable_bundle_excludes_preview_only_rules(self) -> None:
+        with tempfile.TemporaryDirectory() as output:
+            manifest = build_bundle(
+                self.chart_dir,
+                Path(output),
+                10,
+                channel="stable",
+                minimum_app_version_code=123,
+            )
+            with zipfile.ZipFile(Path(output) / "chart.bundle") as archive:
+                catalog = json.loads(archive.read("catalog.json"))
+
+        self.assertEqual(
+            ["official.flutter", "official.itgsa"],
+            [rule["id"] for rule in catalog["definitions"]],
+        )
+        self.assertEqual(123, manifest["minimumAppVersionCode"])
 
     def test_native_library_rule_rejects_incompatible_operator(self) -> None:
         flutter_rule = next(
@@ -57,31 +78,46 @@ class BuildChartBundleTest(unittest.TestCase):
 
         self.assertEqual("original", flutter_rule["icon"]["renderMode"])
 
-    def test_itgsa_rule_keeps_all_detection_data_in_the_condition(self) -> None:
+    def test_itgsa_rule_keeps_all_detection_data_in_ordered_facets(self) -> None:
         itgsa_rule = next(
             rule for rule in read_rules(self.chart_dir) if rule["id"] == "official.itgsa"
         )
-        conditions = itgsa_rule["calculation"]["predicate"]["condition"]["any"]
+        facets = itgsa_rule["calculation"]["facets"]["items"]
         self.assertEqual(
-            {"dex_class", "manifest_receiver_action"},
-            {condition["evidence"] for condition in conditions},
+            ["voip-service-kit", "fair-runtime-memory", "security-paste-view"],
+            [facet["id"] for facet in facets],
         )
 
-        dex_condition = next(
-            condition for condition in conditions if condition["evidence"] == "dex_class"
-        )
-        queries = dex_condition["value"]["dexClasses"]
-        self.assertEqual("Lcom/voip/service/", queries[0]["name"]["value"])
+        voip_queries = facets[0]["condition"]["value"]["dexClasses"]
+        self.assertEqual("Lcom/voip/service/", voip_queries[0]["name"]["value"])
+
+        fair_conditions = facets[1]["condition"]["any"]
         self.assertEqual(
-            "Lcom/os/widget/SecurityPasteView;", queries[1]["name"]["value"]
+            {"dex_class", "manifest_receiver_action"},
+            {condition["evidence"] for condition in fair_conditions},
         )
+        fair_dex_condition = next(
+            condition
+            for condition in fair_conditions
+            if condition["evidence"] == "dex_class"
+        )
+        fair_queries = fair_dex_condition["value"]["dexClasses"]
         self.assertEqual(
             {"itgsa.intent.action.TRIM", "itgsa.intent.action.KILL"},
-            set(queries[2]["stringConstants"]),
+            set(fair_queries[0]["stringConstants"]),
         )
         self.assertEqual(
             {"<init>", "addAction"},
-            {reference["name"] for reference in queries[2]["methodReferences"]},
+            {
+                reference["name"]
+                for reference in fair_queries[0]["methodReferences"]
+            },
+        )
+
+        security_queries = facets[2]["condition"]["value"]["dexClasses"]
+        self.assertEqual(
+            "Lcom/os/widget/SecurityPasteView;",
+            security_queries[0]["name"]["value"],
         )
 
     def test_unknown_evidence_is_rejected(self) -> None:
@@ -89,11 +125,23 @@ class BuildChartBundleTest(unittest.TestCase):
             rule for rule in read_rules(self.chart_dir) if rule["id"] == "official.itgsa"
         )
         invalid_rule = deepcopy(itgsa_rule)
-        invalid_rule["calculation"]["predicate"]["condition"]["any"][0][
+        invalid_rule["calculation"]["facets"]["items"][0]["condition"][
             "evidence"
         ] = "app_capability"
 
         with self.assertRaisesRegex(ValueError, "Unsupported rule evidence"):
+            validate_calculation(invalid_rule, invalid_rule["id"])
+
+    def test_duplicate_facet_ids_are_rejected(self) -> None:
+        itgsa_rule = next(
+            rule for rule in read_rules(self.chart_dir) if rule["id"] == "official.itgsa"
+        )
+        invalid_rule = deepcopy(itgsa_rule)
+        invalid_rule["calculation"]["facets"]["items"][1]["id"] = (
+            "voip-service-kit"
+        )
+
+        with self.assertRaisesRegex(ValueError, "Facet id is duplicated"):
             validate_calculation(invalid_rule, invalid_rule["id"])
 
 

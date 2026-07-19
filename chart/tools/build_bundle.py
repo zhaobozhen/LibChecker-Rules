@@ -32,14 +32,24 @@ MAX_DEX_CLASS_QUERIES = 16
 MAX_STRING_VALUES = 16
 MAX_METHOD_REFERENCES = 16
 MAX_METHOD_PARAMETERS = 16
+MAX_FACETS = 8
+MAX_FACET_TITLE_LENGTH = 40
 DEX_CLASS_PATTERN = re.compile(r"L[A-Za-z0-9_$/-]{1,158};?")
 DEX_CLASS_DESCRIPTOR = re.compile(r"L[A-Za-z0-9_$/-]{1,158};")
 DEX_METHOD_NAME = re.compile(r"[A-Za-z0-9_$<>-]{1,80}")
 DEX_PARAMETER_TYPE = re.compile(r"\[*[ZBSCIJFD]|\[*L[A-Za-z0-9_$/-]{1,158};")
 MANIFEST_ACTION = re.compile(r"[A-Za-z0-9_.-]{1,160}")
+FACET_ID = re.compile(r"[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*")
+LOCALE_TAG = re.compile(r"[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*")
+REQUIRED_LOCALES = {"en", "zh-Hans"}
+FORBIDDEN_LOCALES = {"zh", "zh-CN"}
+RELEASE_CHANNELS = {"stable", "preview-only"}
+BUILD_CHANNELS = {"preview", "stable"}
 
 
-def read_rules(chart_dir: Path) -> list[dict]:
+def read_rules(chart_dir: Path, channel: str = "preview") -> list[dict]:
+    if channel not in BUILD_CHANNELS:
+        raise ValueError(f"Unsupported chart release channel: {channel}")
     rules = []
     ids = set()
     for rule_path in sorted((chart_dir / "rules").glob("*.json")):
@@ -53,11 +63,17 @@ def read_rules(chart_dir: Path) -> list[dict]:
             raise ValueError(f"Duplicate rule id: {rule_id}")
         if rule.get("source") != "official":
             raise ValueError(f"External rule must use official source: {rule_id}")
+        release_channel = rule.get("releaseChannel", "stable")
+        if release_channel not in RELEASE_CHANNELS:
+            raise ValueError(f"Invalid release channel for {rule_id}: {release_channel}")
+        validate_translated_text(rule.get("title"), rule_id, "title", 80)
         validate_calculation(rule, rule_id)
         icon_path = validate_relative_icon_path(rule, rule_id)
         validate_svg(chart_dir / icon_path)
         ids.add(rule_id)
-        rules.append(rule)
+        rule.pop("releaseChannel", None)
+        if channel == "preview" or release_channel == "stable":
+            rules.append(rule)
     if not rules:
         raise ValueError("At least one chart rule is required")
     if len(rules) > MAX_RULES:
@@ -67,9 +83,17 @@ def read_rules(chart_dir: Path) -> list[dict]:
 
 def validate_calculation(rule: dict, rule_id: str) -> None:
     calculation = rule.get("calculation", {})
+    kind = calculation.get("kind")
+    if kind == "facets":
+        validate_facets(calculation, rule_id)
+        return
+    if kind != "predicate":
+        raise ValueError(f"External rule has an unsupported calculation: {rule_id}")
     predicate = calculation.get("predicate", {})
-    if calculation.get("kind") != "predicate":
-        raise ValueError(f"External rule must use a predicate calculation: {rule_id}")
+    if set(calculation) != {"kind", "predicate"}:
+        raise ValueError(f"Predicate calculation has unexpected fields: {rule_id}")
+    validate_translated_text(predicate.get("matchedTitle"), rule_id, "matchedTitle", 80)
+    validate_translated_text(predicate.get("unmatchedTitle"), rule_id, "unmatchedTitle", 80)
     legacy_keys = {"evidence", "operator", "value"}
     legacy_count = sum(key in predicate for key in legacy_keys)
     condition = predicate.get("condition")
@@ -80,6 +104,60 @@ def validate_calculation(rule: dict, rule_id: str) -> None:
     else:
         raise ValueError(f"Predicate must define one complete condition: {rule_id}")
     validate_condition(root, rule_id, depth=1, state={"nodes": 0})
+
+
+def validate_facets(calculation: dict, rule_id: str) -> None:
+    if set(calculation) != {"kind", "facets"}:
+        raise ValueError(f"Facets calculation has unexpected fields: {rule_id}")
+    facets = calculation.get("facets")
+    if not isinstance(facets, dict) or set(facets) != {
+        "matchedTitle",
+        "unmatchedTitle",
+        "items",
+    }:
+        raise ValueError(f"Facets calculation is incomplete: {rule_id}")
+    validate_translated_text(facets["matchedTitle"], rule_id, "matchedTitle", 80)
+    validate_translated_text(facets["unmatchedTitle"], rule_id, "unmatchedTitle", 80)
+    items = facets["items"]
+    if not isinstance(items, list) or not 1 <= len(items) <= MAX_FACETS:
+        raise ValueError(f"Facets calculation has an invalid item count: {rule_id}")
+    facet_ids = set()
+    condition_state = {"nodes": 0}
+    for facet in items:
+        if not isinstance(facet, dict) or set(facet) != {"id", "title", "condition"}:
+            raise ValueError(f"Facet has invalid fields: {rule_id}")
+        facet_id = facet["id"]
+        if not isinstance(facet_id, str) or FACET_ID.fullmatch(facet_id) is None:
+            raise ValueError(f"Facet has an invalid id: {rule_id}: {facet_id}")
+        if facet_id in facet_ids:
+            raise ValueError(f"Facet id is duplicated: {rule_id}: {facet_id}")
+        facet_ids.add(facet_id)
+        validate_translated_text(
+            facet["title"], rule_id, f"facet {facet_id} title", MAX_FACET_TITLE_LENGTH
+        )
+        validate_condition(facet["condition"], rule_id, depth=1, state=condition_state)
+
+
+def validate_translated_text(
+    text: object, rule_id: str, field_name: str, maximum_length: int
+) -> None:
+    if not isinstance(text, dict) or set(text) != {"translations"}:
+        raise ValueError(f"Rule has an invalid translated {field_name}: {rule_id}")
+    translations = text["translations"]
+    if (
+        not isinstance(translations, dict)
+        or not REQUIRED_LOCALES <= set(translations)
+        or FORBIDDEN_LOCALES & set(translations)
+        or not 2 <= len(translations) <= 16
+        or any(
+            not isinstance(locale, str)
+            or LOCALE_TAG.fullmatch(locale) is None
+            or not isinstance(value, str)
+            or not 1 <= len(value) <= maximum_length
+            for locale, value in translations.items()
+        )
+    ):
+        raise ValueError(f"Rule has an invalid translated {field_name}: {rule_id}")
 
 
 def validate_condition(condition: dict, rule_id: str, depth: int, state: dict) -> None:
@@ -256,8 +334,10 @@ def validate_svg(path: Path) -> None:
     forbidden = next((token for token in FORBIDDEN_SVG if token in svg), None)
     if forbidden:
         raise ValueError(f"SVG contains forbidden content {forbidden}: {path}")
-    if "<svg" not in svg or "viewbox=" not in svg:
-        raise ValueError(f"SVG root or viewBox is missing: {path}")
+    if "<svg" not in svg or re.search(
+        r"viewbox\s*=\s*['\"]0\s+0\s+1024\s+1024['\"]", svg
+    ) is None:
+        raise ValueError(f"SVG must use a 0 0 1024 1024 viewBox: {path}")
 
 
 def zip_entry(name: str, data: bytes) -> tuple[zipfile.ZipInfo, bytes]:
@@ -267,8 +347,14 @@ def zip_entry(name: str, data: bytes) -> tuple[zipfile.ZipInfo, bytes]:
     return info, data
 
 
-def build_bundle(chart_dir: Path, output_dir: Path, bundle_version: int) -> dict:
-    rules = read_rules(chart_dir)
+def build_bundle(
+    chart_dir: Path,
+    output_dir: Path,
+    bundle_version: int,
+    channel: str = "preview",
+    minimum_app_version_code: int = 0,
+) -> dict:
+    rules = read_rules(chart_dir, channel=channel)
     output_dir.mkdir(parents=True, exist_ok=True)
     catalog = {
         "schemaVersion": 1,
@@ -296,7 +382,7 @@ def build_bundle(chart_dir: Path, output_dir: Path, bundle_version: int) -> dict
         "bundleVersion": bundle_version,
         "bundleSha256": hashlib.sha256(bundle_bytes).hexdigest(),
         "bundleSize": len(bundle_bytes),
-        "minimumAppVersionCode": 0,
+        "minimumAppVersionCode": minimum_app_version_code,
     }
     (output_dir / "manifest.json").write_text(
         json.dumps(manifest, indent=4, sort_keys=True) + "\n",
@@ -308,14 +394,24 @@ def build_bundle(chart_dir: Path, output_dir: Path, bundle_version: int) -> dict
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build LibChecker chart rules")
     parser.add_argument("--bundle-version", type=int, required=True)
+    parser.add_argument("--channel", choices=sorted(BUILD_CHANNELS), default="preview")
+    parser.add_argument("--minimum-app-version-code", type=int, default=0)
     parser.add_argument("--output-dir", type=Path)
     args = parser.parse_args()
     if args.bundle_version < 1:
         parser.error("--bundle-version must be positive")
+    if args.minimum_app_version_code < 0:
+        parser.error("--minimum-app-version-code cannot be negative")
 
     chart_dir = Path(__file__).resolve().parents[1]
     output_dir = args.output_dir or chart_dir / "cloud" / "v1"
-    manifest = build_bundle(chart_dir, output_dir, args.bundle_version)
+    manifest = build_bundle(
+        chart_dir,
+        output_dir,
+        args.bundle_version,
+        channel=args.channel,
+        minimum_app_version_code=args.minimum_app_version_code,
+    )
     print(
         f"Built chart bundle v{manifest['bundleVersion']} "
         f"({manifest['bundleSize']} bytes, {manifest['bundleSha256']})"
