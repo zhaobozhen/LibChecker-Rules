@@ -115,12 +115,13 @@ Run from the repository root:
 
 ```shell
 python3 -m unittest chart.tools.test_build_bundle
-python3 chart/tools/build_bundle.py --bundle-version 11 --channel preview --minimum-app-version-code 0
+python3 chart/tools/build_bundle.py --bundle-version 11 --channel preview --minimum-app-version-code 2731
 ```
 
-For an APK-dependent calculation type, replace `0` with the exact first
-compatible APK version code before publishing the preview manifest. Bundle
-versions must increase independently on each published branch.
+Set `minimum-app-version-code` to the exact first compatible APK version before
+publishing. Use `0` only when every supported published APK already implements
+the rule's calculation and evidence types. Bundle versions must increase
+independently on each published branch.
 
 The preview build includes stable and preview-only rules. A stable build uses
 `--channel stable`; its tests must prove that preview-only rules are absent.
